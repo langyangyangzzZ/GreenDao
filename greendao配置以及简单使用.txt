@@ -1,0 +1,146 @@
+ // 添加代码仓库  步骤1
+	mavenCentral()
+//greenDao生产代码插件  步骤2
+    	classpath 'org.greenrobot:greendao-gradle-plugin:3.2.2' // add plugin
+// apply plugin 步骤3
+	apply plugin: 'org.greenrobot.greendao'
+//greenDAO配置  步骤4
+    implementation 'org.greenrobot:greendao:3.2.2' // add library
+    implementation 'org.greenrobot:greendao-generator:3.2.2'
+//greendao配置  步骤5  在buildTypes下面添加
+    greendao {
+        //数据库版本号，升级时修改
+        schemaVersion 1
+        //生成的DAO，DaoMaster和DaoSession的包路径。默认与表实体所在的包路径相同
+        daoPackage 'com.example.szj.greendaodemo.db'
+        //生成源文件的路径。默认源文件目录是在build目录中的(build/generated/source/greendao)
+        targetGenDir 'src/main/java'
+    }
+
+//第六步，
+	建bean类 实体类和数据库对应，，添加相关注解，，然后编译项目生成相关文件   锤项目
+	@Entity
+	public class Bean {
+    		@Id    //表示是表中的主键
+    		private Long id; //一定是Long型
+    		private String date;
+    		@Unique   //此字段的值唯一约束：不能重复
+    		private String name;
+    		private int step;
+	}
+
+
+
+//第七步，
+	创建一个自己的application类，在application中完成DaoSession的初始化，避免以后重复初始化，
+		便于使用  ，，，要配置到清单中
+public class BaseApp extends Application {
+    private BaseApp sInstance;
+    private DaoMaster.DevOpenHelper mHelper;
+    private DaoMaster mDaoMaster;
+    private DaoSession mDaoSession;
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        sInstance = this;
+        setDatabase();
+    }
+        /**
+         * 设置greenDao
+         */
+    private void setDatabase() {
+        //通过DaoMaster内部类DevOpenHelper可以获取一个SQLiteOpenHelper 对象
+        // 可能你已经注意到了，你并不需要去编写「CREATE TABLE」这样的 SQL 语句，因为 greenDAO 已经帮你做了。
+        // 注意：默认的 DaoMaster.DevOpenHelper 会在数据库升级时，删除所有的表，意味着这将导致数据的丢失。
+        // 所以，在正式的项目中，你还应该做一层封装，来实现数据库的安全升级。
+        // 此处MyDb表示数据库名称 可以任意填写
+        mHelper = new DaoMaster.DevOpenHelper(this, "MyDb", null);    // MyDb是数据库的名字，更具自己的情况修改
+        SQLiteDatabase db = mHelper.getWritableDatabase();
+        mDaoMaster = new DaoMaster(db);
+        mDaoSession = mDaoMaster.newSession();
+    }
+    public BaseApp getInstance(){
+        return sInstance;
+    }
+    public DaoSession getDaoSession(){
+        return mDaoSession;
+    }
+
+}
+
+
+//第八步  
+	在清单中使用此BaseApp
+	<application
+        android:name=".BaseApp"
+        android:allowBackup="true"
+
+//第九步  
+	使用，BeanDao beanDao = BaseApp.getInstance().getDaoSession().getBeanDao();//得到对象
+	完成数据库的创建，表的创建，插入数据insert
+
+
+
+
+
+
+插入:
+baseDaoDao .insert("插入数据");		插入一条:
+baseDaoDao .insertInTx("插入多条数据集合");	插入多条:
+baseDaoDao .insertOrReplace("插入数据");		不存在则插入,存在则替换	单条
+baseDaoDao .insertOrReplaceInTx("插入多条数据");    不存在则插入,存在则替换	   多条
+删除:
+baseDaoDao .delete("删除数据");		删除一条
+baseDaoDao .deleteByKey(2L);		按照Key(键) id删除
+baseDaoDao .deleteAll();		删除所有数据
+baseDaoDao .deleteInTx("删除对象集合");		删除多个对象
+Long[] keys = {5L,6L(要删除的id)};
+baseDaoDao .deleteByKeyInTx(keys);		以Key(id)删除多个对象
+修改:
+baseDaoDao .update("修改对象");		修改一个,通过Key修改
+baseDaoDao .updataInTx("修改集合对象");  修改多个 ,通过Key修改
+查询:
+baseDaoDao .loadAll();		查询所有
+精确查询:通过一个属性获得一条数据(unique)
+SqlBean unique = 		//查询age > 20的人数(只有一个,精确查找,若有多个直接崩溃)
+baseDaoDao .queryBuilder().where(自动生成类名.Properties.age.gt(20)).unique();
+List<SqlBean> list =	//查询age > 20的人数(获得>20的所有人数集合)
+baseDaoDao .queryBuilder().where(自动生成类名.Properties.age.gt(20)).list();
+其余方法和gt()一样使用...
+
+- eq()：	==  
+- noteq()：!= 
+- gt()：	 >
+- lt()：	< 
+- ge()：	>=
+- le():		<= 
+- like(%张%)：模糊查询
+- between：两者之间
+- in：	在某个值内 
+- notIn： 不在某个值内
+
+多个条件查询:
+List<UserBean> list = 	相当于 && //查询名字为张三,年龄为22的人数	
+baseDaoDao .queryBuilder().where(UserBeanDao.Properties.Name.eq("张三"),
+baseDaoDao .Properties.Age.eq(22)).list();
+ List<UserBean> list = 	相当于 ||	//查询满足张三或者满足年龄22的人数
+baseDaoDao .queryBuilder().whereOr(UserBeanDao.Properties.Name.eq("张三"), 		                   baseDaoDao .Properties.Age.eq(22)).list();
+   
+@Entity	只有使用@Entity注释的Bean类才能被dao类操作;
+@ID(autoincrement=true) 	主键自增
+@ID		主键
+@Property (nameInDb = "name" )		给数据库中的表名起名字,不写自动默认为成员变量名字	
+@NotNull 	属性不为空
+@Transient 	使用该注释的属性不会被存入数据库中;
+@Unique 	唯一性
+@Generated   提示开发者该属性不能被修改；并且实体类的方法，属性，构造器一旦被@Generated注释就不能被再次修改，否则或报错
+
+DaoSession  daoSession = BaseApp.getInstance().getDaoSession();
+缓存:
+GreenDao自动缓存.
+清理缓存:	daoSession .clear();
+清理所有缓存:baseDaoDao.detachAll();
+//清除baseDaoDao表对应的对象的所有缓存：注意只和baseDaoDao相关
+
+
+
